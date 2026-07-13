@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { RobotSimulator } from './components/RobotSimulator';
+import html2canvas from 'html2canvas';
 
 interface CapabilityItem {
   code: string;
@@ -61,7 +62,8 @@ export default function App() {
   // Saved Scenarios State
   const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
   const [savedSearchQuery, setSavedSearchQuery] = useState("");
-  const lastServerCount = useRef<number>(-1); // 마지막으로 서버에서 받은 시나리오 수
+  const scenarioRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
+  const [exportingId, setExportingId] = useState<string | null>(null);
   
   // Settings Panel States (stored in localStorage)
   const [selectionMode, setSelectionMode] = useState<'essential' | 'balanced' | 'detailed'>('essential');
@@ -89,23 +91,6 @@ export default function App() {
   const [formEnabled, setFormEnabled] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // 서버 응답으로 시나리오 업데이트 (서버가 단일 진실 소스)
-  const updateScenariosFromServer = useCallback((serverList: SavedScenario[]) => {
-    if (!Array.isArray(serverList)) return;
-    // 빈 배열이 와도 로컬에 뭔가 있으면 무시 (서버 cold start 대비)
-    // 단, 로컬이 비어있거나 서버에 뭔가 있으면 업데이트
-    setSavedScenarios(prev => {
-      if (serverList.length === 0 && prev.length > 0) {
-        // 서버가 빈 배열인데 로컬에 데이터가 있으면 무시
-        return prev;
-      }
-      // 서버 데이터가 더 많거나 같으면 서버 데이터로 업데이트
-      localStorage.setItem('puko_saved_scenarios', JSON.stringify(serverList));
-      lastServerCount.current = serverList.length;
-      return serverList;
-    });
-  }, []);
 
   // Load database and saved scenarios on mount
   useEffect(() => {
@@ -150,41 +135,13 @@ export default function App() {
         });
     }
 
-    // 3. Load shared scenarios from server and setup background polling
-    const loadSharedScenarios = () => {
-      fetch('/api/scenarios')
-        .then(res => {
-          if (!res.ok) throw new Error();
-          return res.json();
-        })
-        .then(data => {
-          updateScenariosFromServer(data);
-        })
-        .catch(() => {
-          // 서버 실패 시 로컬 스토리지에서 복원
-          const savedLocal = localStorage.getItem('puko_saved_scenarios');
-          if (savedLocal) {
-            try {
-              setSavedScenarios(JSON.parse(savedLocal));
-            } catch (e) {}
-          }
-        });
-    };
-
-    loadSharedScenarios();
-
-    // 3초마다 서버에서 최신 시나리오 폴링 (실시간 멀티유저 동기화)
-    const pollInterval = setInterval(() => {
-      fetch('/api/scenarios')
-        .then(res => {
-          if (res.ok) return res.json();
-          throw new Error('sync error');
-        })
-        .then(data => {
-          updateScenariosFromServer(data);
-        })
-        .catch(() => { /* 네트워크 오류 시 현재 상태 유지 */ });
-    }, 3000);
+    // 3. Load saved scenarios from localStorage only (no server sync)
+    const savedLocal = localStorage.getItem('puko_saved_scenarios');
+    if (savedLocal) {
+      try {
+        setSavedScenarios(JSON.parse(savedLocal));
+      } catch (e) {}
+    }
 
     // 4. Load settings from localStorage
     const savedMode = localStorage.getItem('puko_settings_selectionMode');
@@ -207,11 +164,7 @@ export default function App() {
 
     const savedValPreventMutation = localStorage.getItem('puko_settings_valPreventMutation');
     if (savedValPreventMutation) setValidationPreventMutation(savedValPreventMutation === 'true');
-
-    return () => {
-      clearInterval(pollInterval);
-    };
-  }, [updateScenariosFromServer]);
+  }, []);
 
 
   // Sync settings helper
@@ -284,8 +237,8 @@ export default function App() {
     }
   };
 
-  // Save scenario action
-  const handleSaveScenario = async () => {
+  // Save scenario action - localStorage only
+  const handleSaveScenario = () => {
     if (!matchResult || !scenarioText.trim()) return;
 
     const isDuplicate = savedScenarios.some(
@@ -310,59 +263,48 @@ export default function App() {
       result: matchResult
     };
 
-    // Optimistically update locally first
     setSavedScenarios(prev => {
       const updated = [newSaved, ...prev];
       localStorage.setItem('puko_saved_scenarios', JSON.stringify(updated));
       return updated;
     });
-
-    try {
-      const res = await fetch('/api/scenarios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save', scenario: newSaved })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // 서버 응답으로 확정 업데이트 (빈 배열이면 로컬 유지)
-        if (data.length > 0) {
-          setSavedScenarios(data);
-          localStorage.setItem('puko_saved_scenarios', JSON.stringify(data));
-        }
-      }
-      alert("시나리오가 성공적으로 저장 및 실시간 공유되었습니다!");
-    } catch (err) {
-      console.warn("Failed to sync save with server:", err);
-      alert("시나리오가 로컬 브라우저에 저장되었습니다.");
-    }
+    alert("시나리오가 저장되었습니다!");
   };
 
-  // Delete saved scenario action
-  const handleDeleteScenario = async (id: string, e: React.MouseEvent) => {
+  // Delete saved scenario - localStorage only
+  const handleDeleteScenario = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("정말 이 시나리오를 삭제하시겠습니까?")) return;
 
-    // 로컬에서 즉시 제거
     setSavedScenarios(prev => {
       const updated = prev.filter(s => s.id !== id);
       localStorage.setItem('puko_saved_scenarios', JSON.stringify(updated));
       return updated;
     });
+  };
 
+  // Export scenario card as PNG
+  const handleExportPNG = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const el = scenarioRefs.current[id];
+    if (!el) return;
+    setExportingId(id);
     try {
-      const res = await fetch('/api/scenarios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', id: id })
+      const canvas = await html2canvas(el, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        logging: false
       });
-      if (res.ok) {
-        const data = await res.json();
-        setSavedScenarios(data);
-        localStorage.setItem('puko_saved_scenarios', JSON.stringify(data));
-      }
+      const link = document.createElement('a');
+      link.download = `puco_scenario_${id}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
     } catch (err) {
-      console.warn("Failed to sync delete with server:", err);
+      console.error('PNG export failed:', err);
+      alert('PNG 내보내기에 실패했습니다.');
+    } finally {
+      setExportingId(null);
     }
   };
 
@@ -997,7 +939,8 @@ export default function App() {
               {filteredSavedScenarios.map((scenario) => (
                 <div 
                   key={scenario.id} 
-                  class="subcard" 
+                  ref={(el) => { scenarioRefs.current[scenario.id] = el; }}
+                  className="subcard" 
                   onClick={() => handleLoadScenario(scenario)}
                   style={{ 
                     cursor: 'pointer', 
@@ -1078,12 +1021,29 @@ export default function App() {
                   </div>
 
                   {/* Actions */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px', borderTop: '1px solid #f2f2f7', paddingTop: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px', borderTop: '1px solid #f2f2f7', paddingTop: '12px', flexWrap: 'wrap' }}>
                     <button 
-                      class="btn-primary"
+                      className="btn-primary"
+                      onClick={(e) => handleExportPNG(scenario.id, e)}
+                      disabled={exportingId === scenario.id}
+                      style={{ 
+                        padding: '8px 14px', 
+                        borderRadius: '16px', 
+                        fontSize: '12px', 
+                        background: 'rgba(0, 196, 83, 0.08)', 
+                        color: '#00a844',
+                        boxShadow: 'none',
+                        opacity: exportingId === scenario.id ? 0.6 : 1
+                      }}
+                    >
+                      <i className="fa-solid fa-image" style={{ marginRight: '6px' }}></i>
+                      {exportingId === scenario.id ? '내보내는 중...' : 'PNG 저장'}
+                    </button>
+                    <button 
+                      className="btn-primary"
                       onClick={() => handleLoadScenario(scenario)}
                       style={{ 
-                        padding: '8px 16px', 
+                        padding: '8px 14px', 
                         borderRadius: '16px', 
                         fontSize: '12px', 
                         background: 'var(--primary-light)', 
@@ -1091,14 +1051,14 @@ export default function App() {
                         boxShadow: 'none'
                       }}
                     >
-                      <i class="fa-solid fa-folder-open" style={{ marginRight: '6px' }}></i>
+                      <i className="fa-solid fa-folder-open" style={{ marginRight: '6px' }}></i>
                       콘솔로 불러오기
                     </button>
                     <button 
-                      class="btn-primary"
+                      className="btn-primary"
                       onClick={(e) => handleDeleteScenario(scenario.id, e)}
                       style={{ 
-                        padding: '8px 16px', 
+                        padding: '8px 14px', 
                         borderRadius: '16px', 
                         fontSize: '12px', 
                         background: 'rgba(255, 59, 48, 0.08)', 
@@ -1106,7 +1066,7 @@ export default function App() {
                         boxShadow: 'none'
                       }}
                     >
-                      <i class="fa-solid fa-trash-can" style={{ marginRight: '6px' }}></i>
+                      <i className="fa-solid fa-trash-can" style={{ marginRight: '6px' }}></i>
                       삭제
                     </button>
                   </div>
