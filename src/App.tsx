@@ -132,15 +132,41 @@ export default function App() {
         });
     }
 
-    // 2. Load saved scenarios from localStorage
-    const saved = localStorage.getItem('puko_saved_scenarios');
-    if (saved) {
-      try {
-        setSavedScenarios(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load saved scenarios:", e);
-      }
-    }
+    // 2. Load shared scenarios from server and setup background polling
+    const loadSharedScenarios = () => {
+      fetch('/api/scenarios')
+        .then(res => {
+          if (!res.ok) throw new Error();
+          return res.json();
+        })
+        .then(data => {
+          setSavedScenarios(data);
+          localStorage.setItem('puko_saved_scenarios', JSON.stringify(data));
+        })
+        .catch(() => {
+          // Fallback to local storage on offline / init fail
+          const savedLocal = localStorage.getItem('puko_saved_scenarios');
+          if (savedLocal) {
+            try { setSavedScenarios(JSON.parse(savedLocal)); } catch(e){}
+          }
+        });
+    };
+
+    loadSharedScenarios();
+
+    // Poll scenarios from server every 3 seconds for real-time multi-user syncing
+    const pollInterval = setInterval(() => {
+      fetch('/api/scenarios')
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error();
+        })
+        .then(data => {
+          setSavedScenarios(data);
+          localStorage.setItem('puko_saved_scenarios', JSON.stringify(data));
+        })
+        .catch(() => { /* ignore polling errors when offline */ });
+    }, 3000);
 
     // 3. Load settings from localStorage
     const savedMode = localStorage.getItem('puko_settings_selectionMode');
@@ -163,6 +189,10 @@ export default function App() {
 
     const savedValPreventMutation = localStorage.getItem('puko_settings_valPreventMutation');
     if (savedValPreventMutation) setValidationPreventMutation(savedValPreventMutation === 'true');
+
+    return () => {
+      clearInterval(pollInterval);
+    };
   }, []);
 
   // Sync settings helper
@@ -236,7 +266,7 @@ export default function App() {
   };
 
   // Save scenario action
-  const handleSaveScenario = () => {
+  const handleSaveScenario = async () => {
     if (!matchResult || !scenarioText.trim()) return;
 
     const isDuplicate = savedScenarios.some(
@@ -261,20 +291,52 @@ export default function App() {
       result: matchResult
     };
 
+    // Optimistically update locally
     const updated = [newSaved, ...savedScenarios];
     setSavedScenarios(updated);
     localStorage.setItem('puko_saved_scenarios', JSON.stringify(updated));
-    alert("시나리오가 성공적으로 저장되었습니다!");
+
+    try {
+      const res = await fetch('/api/scenarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save', scenario: newSaved })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSavedScenarios(data);
+        localStorage.setItem('puko_saved_scenarios', JSON.stringify(data));
+      }
+      alert("시나리오가 성공적으로 저장 및 실시간 공유되었습니다!");
+    } catch (err) {
+      console.warn("Failed to sync save with server:", err);
+      alert("시나리오가 로컬 브라우저에 저장되었습니다.");
+    }
   };
 
   // Delete saved scenario action
-  const handleDeleteScenario = (id: string, e: React.MouseEvent) => {
+  const handleDeleteScenario = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("정말 이 시나리오를 삭제하시겠습니까?")) return;
 
     const updated = savedScenarios.filter(s => s.id !== id);
     setSavedScenarios(updated);
     localStorage.setItem('puko_saved_scenarios', JSON.stringify(updated));
+
+    try {
+      const res = await fetch('/api/scenarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id: id })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSavedScenarios(data);
+        localStorage.setItem('puko_saved_scenarios', JSON.stringify(data));
+      }
+    } catch (err) {
+      console.warn("Failed to sync delete with server:", err);
+    }
   };
 
   // Load saved scenario back to console

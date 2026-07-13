@@ -270,6 +270,52 @@ async function startServer() {
     res.json(capabilityDb);
   });
 
+  // 2.1 Fetch Shared Scenarios
+  app.get('/api/scenarios', (req, res) => {
+    try {
+      const scenariosPath = path.join(__dirname, 'scenarios.json');
+      if (fs.existsSync(scenariosPath)) {
+        const data = fs.readFileSync(scenariosPath, 'utf-8');
+        return res.json(JSON.parse(data || '[]'));
+      }
+      res.json([]);
+    } catch (err) {
+      console.error("Failed to read scenarios database file:", err);
+      res.status(500).json({ error: `시나리오 조회 실패: ${err.message}` });
+    }
+  });
+
+  // 2.2 Save/Update/Delete Shared Scenarios
+  app.post('/api/scenarios', (req, res) => {
+    try {
+      const scenariosPath = path.join(__dirname, 'scenarios.json');
+      const { action, scenario, id, list } = req.body;
+      
+      let current = [];
+      if (fs.existsSync(scenariosPath)) {
+        const data = fs.readFileSync(scenariosPath, 'utf-8');
+        current = JSON.parse(data || '[]');
+      }
+
+      if (action === 'save' && scenario) {
+        const exists = current.some(s => s.scenarioText.trim() === scenario.scenarioText.trim() && JSON.stringify(s.result.summary) === JSON.stringify(scenario.result.summary));
+        if (!exists) {
+          current = [scenario, ...current];
+        }
+      } else if (action === 'delete' && id) {
+        current = current.filter(s => s.id !== id);
+      } else if (action === 'set' && Array.isArray(list)) {
+        current = list;
+      }
+
+      fs.writeFileSync(scenariosPath, JSON.stringify(current, null, 2), 'utf-8');
+      res.json(current);
+    } catch (err) {
+      console.error("Failed to write scenarios database file:", err);
+      res.status(500).json({ error: `시나리오 저장 실패: ${err.message}` });
+    }
+  });
+
   // 3. Matching endpoint with settings and API validations
   app.post('/api/match', async (req, res) => {
     const { scenario, settings = {} } = req.body;
