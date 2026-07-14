@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { RobotSimulator } from './components/RobotSimulator';
 import html2canvas from 'html2canvas';
 
 interface CapabilityItem {
@@ -719,12 +718,10 @@ export default function App() {
       {/* Main Views Router */}
       {currentView === 'console' && (
         <div className="console-split-layout" style={{ 
-          display: 'grid', 
-          gridTemplateColumns: '1.2fr 1fr', 
-          gap: '20px', 
-          alignItems: 'start' 
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px'
         }}>
-          {/* Left Column: Input and Results */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Input Section Card */}
             <section class="oneui-card">
@@ -790,7 +787,7 @@ export default function App() {
             {/* Match Result Display */}
             {!loading && matchResult && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                
+
                 {/* Missing Intent Notification */}
                 {matchResult.missingIntent && (
                   <div class="alert-banner">
@@ -801,17 +798,17 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Combined Summary Card with Save Trigger */}
+                {/* Summary Card with Save Button */}
                 <div class="oneui-card summary-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                   <div>
                     <div class="summary-title">전체 시나리오 요약</div>
                     <div class="summary-text">"{matchResult.summary}"</div>
                   </div>
-                  <button 
+                  <button
                     class="btn-primary"
                     onClick={handleSaveScenario}
-                    style={{ 
-                      background: 'var(--primary-light)', 
+                    style={{
+                      background: 'var(--primary-light)',
                       color: 'var(--primary-color)',
                       boxShadow: 'none',
                       padding: '10px 20px',
@@ -827,84 +824,120 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Capabilities Result Grid (Dynamically renders only active categories) */}
-                {(() => {
-                  const activePanels = [];
-                  if ((matchResult.SN || []).length > 0) {
-                    activePanels.push({ key: 'SN', name: '센서 감지', color: '#1463ff', badge: 'SN', list: matchResult.SN });
-                  }
-                  if ((matchResult.MP || []).length > 0) {
-                    activePanels.push({ key: 'MP', name: '모션 반응', color: '#d500f9', badge: 'MP', list: matchResult.MP });
-                  }
-                  if ((matchResult.PJ || []).length > 0) {
-                    activePanels.push({ key: 'PJ', name: '투사 반응', color: '#00c853', badge: 'PJ', list: matchResult.PJ });
-                  }
-                  if ((matchResult.SP || []).length > 0) {
-                    activePanels.push({ key: 'SP', name: '음향 반응', color: '#ff4081', badge: 'SP', list: matchResult.SP });
-                  }
+                {/* === SENSOR SECTION: ToF | Camera ===  */}
+                <section class="oneui-card">
+                  <div class="card-title">
+                    <i class="fa-solid fa-satellite-dish" style={{ marginRight: '8px', color: 'var(--primary-color)' }}></i>
+                    센서 역할
+                  </div>
+                  <div class="sensor-split-grid">
 
-                  if (activePanels.length === 0) {
-                    return (
-                      <div class="oneui-card" style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text-sub)' }}>
-                        <i class="fa-solid fa-circle-nodes" style={{ fontSize: '36px', color: 'var(--text-muted)', marginBottom: '16px', display: 'block' }}></i>
-                        <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>
-                          활성화된 캐퍼빌리티가 없습니다
-                        </div>
-                        <p style={{ fontSize: '13px' }}>
-                          분석 결과 이 상황에서 매칭되는 필수 로봇 행동 조합이 없습니다. <br />
-                          트리거나 로봇이 행해야 하는 반응을 문장으로 구체화해서 다시 실행해보세요.
-                        </p>
+                    {/* ToF Distance Sensor Column */}
+                    <div class="sensor-col">
+                      <div class="sensor-col-header tof-header">
+                        <i class="fa-solid fa-ruler-combined"></i>
+                        ToF 거리 센서
                       </div>
-                    );
-                  }
-
-                  return (
-                    <div class="results-grid" style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: '1fr', // Stack vertically on split layout
-                      gap: '20px' 
-                    }}>
-                      {activePanels.map((panel) => (
-                        <div key={panel.key} class="oneui-card" style={{ borderTop: `4px solid ${panel.color}`, margin: 0 }}>
-                          <div class="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>
-                              {panel.name} <span class="code-font" style={{ color: panel.color }}>({panel.badge})</span>
-                            </span>
-                            <span class="panel-header-badge" style={{ background: `${panel.color}0a`, color: panel.color, border: `1px solid ${panel.color}1c` }}>
-                              {panel.list.length}건 활성화
-                            </span>
-                          </div>
-                          {panel.list.map((match) => {
+                      {(matchResult.SN || []).filter(m => m.code.startsWith('SN-A')).length > 0
+                        ? (matchResult.SN || []).filter(m => m.code.startsWith('SN-A')).map((match, i) => {
                             const detail = getCapabilityDetail(match.code);
                             return (
-                              <div key={match.code} class="subcard" style={{ borderLeft: `3px solid ${panel.color}` }}>
-                                <div class="subcard-header">
-                                  <span class="code-pill" style={{ background: `${panel.color}0d`, color: panel.color, borderColor: `${panel.color}25` }}>{match.code}</span>
-                                  <span class="subcard-cat">{detail?.category || '기타'}</span>
+                              <div key={match.code} class="sensor-item" style={{ borderTop: i > 0 ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
+                                <div class="sensor-item-header">
+                                  <span class="sensor-item-name">{detail?.name || match.code}</span>
+                                  <span class="code-pill tof-pill">{match.code}</span>
                                 </div>
-                                <div class="subcard-name">{detail?.name || '정보 로딩 중...'}</div>
-                                <div class="subcard-desc">{detail?.desc}</div>
-                                <div class="subcard-reason-divider"></div>
-                                <div class="subcard-reason">
-                                  <span style={{ color: panel.color, marginRight: '6px' }}>●</span>
-                                  {match.reason}
-                                </div>
+                                <div class="sensor-item-desc">{detail?.desc}</div>
+                                {detail?.example && (
+                                  <div class="sensor-item-example">
+                                    <span class="sensor-item-example-label">목적 예시</span>
+                                    <span class="sensor-item-example-text">{detail.example}</span>
+                                  </div>
+                                )}
                               </div>
                             );
-                          })}
-                        </div>
-                      ))}
+                          })
+                        : <div class="sensor-col-empty">해당 없음</div>
+                      }
                     </div>
-                  );
-                })()}
+
+                    <div class="sensor-col-divider" />
+
+                    {/* RGB Camera Sensor Column */}
+                    <div class="sensor-col">
+                      <div class="sensor-col-header camera-header">
+                        <i class="fa-solid fa-camera"></i>
+                        RGB 카메라 센서
+                      </div>
+                      {(matchResult.SN || []).filter(m => !m.code.startsWith('SN-A')).length > 0
+                        ? (matchResult.SN || []).filter(m => !m.code.startsWith('SN-A')).map((match, i) => {
+                            const detail = getCapabilityDetail(match.code);
+                            return (
+                              <div key={match.code} class="sensor-item" style={{ borderTop: i > 0 ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
+                                <div class="sensor-item-header">
+                                  <span class="sensor-item-name">{detail?.name || match.code}</span>
+                                  <span class="code-pill camera-pill">{match.code}</span>
+                                </div>
+                                <div class="sensor-item-desc">{detail?.desc}</div>
+                                {detail?.example && (
+                                  <div class="sensor-item-example">
+                                    <span class="sensor-item-example-label">목적 예시</span>
+                                    <span class="sensor-item-example-text">{detail.example}</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        : <div class="sensor-col-empty">해당 없음</div>
+                      }
+                    </div>
+
+                  </div>
+                </section>
+
+                {/* === CAPABILITY COLUMNS: 모션 | 프로젝터 | 스피커 (항상 3열 고정) === */}
+                <div class="cap-col-container">
+                  {[
+                    { key: 'MP', label: '모션', color: '#f50057', icon: 'fa-person-running', list: matchResult.MP || [] },
+                    { key: 'PJ', label: '프로젝터', color: '#00a86b', icon: 'fa-circle-dot', list: matchResult.PJ || [] },
+                    { key: 'SP', label: '스피커', color: '#ff6d00', icon: 'fa-volume-high', list: matchResult.SP || [] },
+                  ].map((col, idx) => (
+                    <div key={col.key} class="cap-col">
+                      <div class="cap-col-header" style={{ color: col.color }}>
+                        <i class={`fa-solid ${col.icon}`}></i>
+                        {col.label}
+                      </div>
+                      <div class="cap-col-body">
+                        {col.list.length > 0
+                          ? col.list.map((match, i) => {
+                              const detail = getCapabilityDetail(match.code);
+                              return (
+                                <div key={match.code} class="cap-item" style={{ borderTop: i > 0 ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
+                                  <span class="code-pill" style={{ background: `${col.color}0d`, color: col.color, borderColor: `${col.color}28` }}>{match.code}</span>
+                                  <div class="cap-item-name">{detail?.name || match.code}</div>
+                                  <div class="cap-item-desc">{detail?.desc}</div>
+                                  {detail?.example && (
+                                    <div class="cap-item-example">
+                                      <div class="cap-item-example-pill">
+                                        <span class="cap-item-example-label">목적 예시</span>
+                                        <span class="cap-item-example-text">{detail.example}</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          : <div class="cap-col-empty">해당 없음</div>
+                        }
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
               </div>
             )}
           </div>
 
-          {/* Right Column: 3D Simulator Panel (sticky) */}
-          <div style={{ position: 'sticky', top: '24px' }} className="oneui-card">
-            <RobotSimulator activeMotionCode={matchResult?.MP?.[0]?.code || null} />
-          </div>
 
         </div>
       )}

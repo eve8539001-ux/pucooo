@@ -1,7 +1,7 @@
 {
   "SN": [
     {
-      "code": "SN-A-01",
+      "code": "SN-A01",
       "grammar": "센서(SN)",
       "category": "A ToF 센서",
       "name": "근접/정밀 거리 감지",
@@ -9,7 +9,7 @@
       "example": "대기→활성 전환, 투사 초점·크기 계산"
     },
     {
-      "code": "SN-A-02",
+      "code": "SN-A02",
       "grammar": "센서(SN)",
       "category": "A ToF 센서",
       "name": "접근속도·거리제스처 인식",
@@ -17,7 +17,7 @@
       "example": "반응 속도 조절, 저조도 시 보조 입력"
     },
     {
-      "code": "SN-A-03",
+      "code": "SN-A03",
       "grammar": "센서(SN)",
       "category": "A ToF 센서",
       "name": "투사 표면 거리 측정",
@@ -25,7 +25,7 @@
       "example": "투사 이미지 스케일 자동 보정"
     },
     {
-      "code": "SN-B-01",
+      "code": "SN-B01",
       "grammar": "센서(SN)",
       "category": "B 얼굴",
       "name": "얼굴 검출·인식",
@@ -33,7 +33,7 @@
       "example": "사용자 존재 확인, 개인화된 반응"
     },
     {
-      "code": "SN-B-02",
+      "code": "SN-B02",
       "grammar": "센서(SN)",
       "category": "B 얼굴",
       "name": "표정 인식",
@@ -41,7 +41,7 @@
       "example": "사용자 반응에 맞는 톤 조절"
     },
     {
-      "code": "SN-B-03",
+      "code": "SN-B03",
       "grammar": "센서(SN)",
       "category": "B 얼굴",
       "name": "시선/응시 방향 추정",
@@ -49,7 +49,7 @@
       "example": "사용자가 푸코를 보는지 판단"
     },
     {
-      "code": "SN-C-01",
+      "code": "SN-C01",
       "grammar": "센서(SN)",
       "category": "C 신체·동작",
       "name": "자세·방향 추정",
@@ -57,7 +57,7 @@
       "example": "특정 자세 인식, 정면 대응 필요 여부 판단"
     },
     {
-      "code": "SN-C-02",
+      "code": "SN-C02",
       "grammar": "센서(SN)",
       "category": "C 신체·동작",
       "name": "손/발 제스처 인식",
@@ -65,7 +65,7 @@
       "example": "지시 동작, 발 스와이프 조작"
     },
     {
-      "code": "SN-C-03",
+      "code": "SN-C03",
       "grammar": "센서(SN)",
       "category": "C 신체·동작",
       "name": "인원 수 감지",
@@ -73,7 +73,7 @@
       "example": "1인/다인 상황 구분"
     },
     {
-      "code": "SN-C-04",
+      "code": "SN-C04",
       "grammar": "센서(SN)",
       "category": "C 신체·동작",
       "name": "위치·움직임 추적",
@@ -81,7 +81,7 @@
       "example": "헤드/바디 트래킹 모션의 입력값"
     },
     {
-      "code": "SN-C-05",
+      "code": "SN-C05",
       "grammar": "센서(SN)",
       "category": "C 신체·동작",
       "name": "행동/활동 인식",
@@ -89,7 +89,7 @@
       "example": "운동 중/휴식 중 등 상황별 대응"
     },
     {
-      "code": "SN-C-06",
+      "code": "SN-C06",
       "grammar": "센서(SN)",
       "category": "C 신체·동작",
       "name": "투사면 터치 인식",
@@ -97,7 +97,7 @@
       "example": "인터랙티브 투사 콘텐츠 조작"
     },
     {
-      "code": "SN-D-01",
+      "code": "SN-D01",
       "grammar": "센서(SN)",
       "category": "D 환경·표면",
       "name": "표면/장면 인식",
@@ -105,7 +105,7 @@
       "example": "투사 콘텐츠 밝기·대비 자동 보정"
     },
     {
-      "code": "SN-D-02",
+      "code": "SN-D02",
       "grammar": "센서(SN)",
       "category": "D 환경·표면",
       "name": "조도 추정",
@@ -113,7 +113,7 @@
       "example": "투사 밝기 자동 조절"
     },
     {
-      "code": "SN-D-03",
+      "code": "SN-D03",
       "grammar": "센서(SN)",
       "category": "D 환경·표면",
       "name": "객체 인식",
