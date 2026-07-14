@@ -131,229 +131,143 @@ async function startServer() {
       "시나리오 상황과 매칭되는 센서 감지를 활성화함.": "Activate sensor detection matching the scenario.",
       "키워드 의도에 맞춰 모션 자세 제어를 수행함.": "Execute motion control matching the keyword intent.",
       "동작 반응에 맞춘 연동 프로젝션 영역을 투사함.": "Project corresponding display aligned with motion response.",
-      "감정 표현을 위한 스피커 반응을 재생함.": "Play speaker response for emotional expression.",
-      "유사 단어 검출 결과로 해당 감지 필터를 활성화함.": "Activate matched sensing filter based on fuzzy lookup.",
-      "매칭 스코어가 가장 높은 거동을 실시간 적용함.": "Apply the highest-scoring motion control in real-time.",
-      "센서 매칭 데이터에 조화되는 투사를 수행함.": "Perform projection matching the sensor input data.",
-      "상황 톤앤매너에 어울리는 스피커 음색을 출력함.": "Output speaker tone matching the situational style.",
-      "구체적인 트리거와 로봇의 감정을 명시하면 더 명확해져요.": "Make the query clearer by listing triggers and robot emotions.",
-      "입력 상황": "Input scenario",
-      "에 대한 최적 추정 매칭 결과": " - optimal matching inference"
+      "감정 표현을 위한 스피커 반응을 재생함.": "Play speaker response for emotional expression."
     };
     return dict[text] || text;
   };
 
-  function getMatchScore(text, item) {
-    let score = 0;
-    const cleanText = text.toLowerCase().replace(/[^a-zA-Z0-9가-힣\s]/g, "");
-    const stopWords = new Set(["푸코가", "푸코는", "푸코", "푸코의", "로봇이", "로봇은", "로봇"]);
-    const queryWords = cleanText.split(/\s+/).filter(w => w.length > 0 && !stopWords.has(w));
+  function matchLocalScenario(inputText, useEnglishFlag) {
+    const text = inputText.trim();
+    const useEng = typeof useEnglish !== 'undefined' ? useEnglish : (useEnglishFlag || false);
     
-    const itemContent = [
-      item.code,
-      item.grammar,
-      item.category,
-      item.name,
-      item.desc,
-      item.example,
-      item.keywords || ""
-    ].join(" ").toLowerCase();
+    const matchedSN = [];
+    const matchedMP = [];
+    const matchedPJ = [];
+    const matchedSP = [];
 
-    for (const queryWord of queryWords) {
-      if (queryWord.length < 2) continue;
+    // Evaluate Trigger categories
+    const isToFTrigger = ["거리", "가깝", "가까이", "멀어", "다가오", "이탈", "접근", "cm", "m", "초점", "스케일", "재질", "평탄", "근접"].some(w => text.includes(w));
+    const isCameraTrigger = ["바라", "쳐다", "보더", "보니", "얼굴", "표정", "눈", "시선", "자세", "동작", "포즈", "제스처", "손", "발", "사람", "인원", "터치", "조도", "밝기", "사물", "객체", "도구"].some(w => text.includes(w));
+
+    // Dynamic scoring using localScenarios + db
+    const getMatchScore = (input, item, categoryType) => {
+      let score = 0;
+      const lowerInput = input.toLowerCase();
       
-      if (itemContent.includes(queryWord)) {
-        score += 15;
-      }
-      
-      const itemWords = itemContent.split(/[\s\(\)\/]+/).filter(w => w.length > 1);
-      for (const itemWord of itemWords) {
-        if (queryWord.includes(itemWord) || itemWord.includes(queryWord)) {
-          score += 10;
+      // Boost from localScenarios mapping
+      for (const rule of localScenarios) {
+        if (rule.keywords.some(k => lowerInput.includes(k))) {
+          if (categoryType === 'SN' && rule.sensing === item.code) score += 20;
+          if (categoryType === 'MP' && rule.motion === item.code) score += 20;
+          if (categoryType === 'PJ' && rule.projection === item.code) score += 20;
+          if (categoryType === 'SP' && rule.speaker === item.code) score += 20;
         }
       }
-    }
 
-    for (const char of cleanText) {
-      if (char.trim() && itemContent.includes(char)) {
-        score += 0.05;
+      // Basic text matching against DB fields
+      const dbKeywords = [item.category, item.name, item.desc].filter(Boolean);
+      for (const kw of dbKeywords) {
+        if (!kw) continue;
+        const lowerKw = kw.toLowerCase();
+        if (lowerInput.includes(lowerKw)) score += 5;
+        // Check partial match
+        const words = lowerInput.split(' ');
+        for (const word of words) {
+          if (word.length > 1 && (lowerKw.includes(word) || word.includes(lowerKw))) {
+            score += 1.5;
+          }
+        }
       }
-    }
-
-    return score;
-  }
-
-  function matchLocalScenario(inputText, useEnglish) {
-    const text = inputText.trim();
-    
-    // Check keywords
-    for (const rule of localScenarios) {
-      if (rule.keywords.some(k => text.includes(k))) {
-        return {
-          summary: useEnglish ? rule.summaryEn : rule.summary,
-          missingIntent: false,
-          intentNote: "",
-          SN: [{ code: rule.sensing, reason: useEnglish ? translateToEn("시나리오 상황과 매칭되는 센서 감지를 활성화함.") : "시나리오 상황과 매칭되는 센서 감지를 활성화함." }],
-          MP: [{ code: rule.motion, reason: useEnglish ? translateToEn("키워드 의도에 맞춰 모션 자세 제어를 수행함.") : "키워드 의도에 맞춰 모션 자세 제어를 수행함." }],
-          PJ: [{ code: rule.projection, reason: useEnglish ? translateToEn("동작 반응에 맞춘 연동 프로젝션 영역을 투사함.") : "동작 반응에 맞춘 연동 프로젝션 영역을 투사함." }],
-          SP: [{ code: rule.speaker, reason: useEnglish ? translateToEn("감정 표현을 위한 스피커 반응을 재생함.") : "감정 표현을 위한 스피커 반응을 재생함." }]
-        };
-      }
-    }
-
-    // Dynamic fuzzy mapping
-    const resultCodes = {
-      SN: { code: null, score: -1 },
-      MP: { code: null, score: -1 },
-      PJ: { code: null, score: -1 },
-      SP: { code: null, score: -1 }
+      return score;
     };
 
-    for (const key of Object.keys(capabilityDb)) {
-      let bestMatch = null;
-      let maxScore = -1;
-      for (const item of capabilityDb[key]) {
-        // Skip disabled items in matching
-        if (item.enabled === false) continue;
+    // Evaluate all SN capabilities
+    for (const item of capabilityDb.SN) {
+      if (item.enabled === false) continue;
+      const score = getMatchScore(text, item, 'SN');
+      const isToFCode = item.code.startsWith("SN-A");
+      
+      if (isToFCode && !isToFTrigger && score < 15) continue;
+      if (!isToFCode && !isCameraTrigger && score < 15) continue;
+      
+      if (score >= 5.0) matchedSN.push({ code: item.code, score: score });
+    }
 
-        const score = getMatchScore(text, item);
-        if (score > maxScore) {
-          maxScore = score;
-          bestMatch = item;
+    // Evaluate MP
+    for (const item of capabilityDb.MP) {
+      if (item.enabled === false) continue;
+      const score = getMatchScore(text, item, 'MP');
+      if (score >= 6.0) matchedMP.push({ code: item.code, score: score });
+    }
+
+    // Evaluate PJ 
+    const isProjectionNeeded = ["빔", "투사", "화면", "스크린", "보여", "표시", "영상", "이미지", "빛", "조명", "벽", "테이블"].some(w => text.includes(w));
+    for (const item of capabilityDb.PJ) {
+      if (item.enabled === false) continue;
+      const score = getMatchScore(text, item, 'PJ');
+      // Require projection trigger unless highly matched
+      if (!isProjectionNeeded && score < 18) continue;
+      if (score >= 6.0) matchedPJ.push({ code: item.code, score: score });
+    }
+
+    // Evaluate SP 
+    const isSpeakerNeeded = ["소리", "음성", "말하", "말했", "음악", "효과음", "노래", "사운드", "안내", "말해", "대답", "목소리", "톤"].some(w => text.includes(w));
+    for (const item of capabilityDb.SP) {
+      if (item.enabled === false) continue;
+      const score = getMatchScore(text, item, 'SP');
+      // Require speaker trigger unless highly matched
+      if (!isSpeakerNeeded && score < 18) continue;
+      if (score >= 6.0) matchedSP.push({ code: item.code, score: score });
+    }
+
+    const sortAndFormat = (items, labelKo, labelEn) => {
+      // Sort desc, remove duplicates, take top 3
+      const unique = [];
+      const seen = new Set();
+      items.sort((a, b) => b.score - a.score).forEach(item => {
+        if (!seen.has(item.code)) {
+          seen.add(item.code);
+          unique.push(item);
         }
-      }
-      // Threshold 5.0 to filter out noise, ensuring at least one real word overlap
-      if (bestMatch && maxScore >= 5.0) {
-        resultCodes[key] = { code: bestMatch.code, score: maxScore };
+      });
+
+      return unique.slice(0, 3).map(item => ({
+        code: item.code,
+        reason: useEng ? `Activated due to trigger matching ${labelEn}.` : `상황 인풋 분석 결과 ${labelKo} 거동에 부합함.`
+      }));
+    };
+
+    let finalSN = sortAndFormat(matchedSN, "센서 감지", "sensing trigger");
+    if (finalSN.length === 0) {
+      if (isToFTrigger) {
+        finalSN = [{ code: "SN-A01", reason: "물리적 거리/접근 센서 선행 작동" }];
+      } else if (isCameraTrigger) {
+        finalSN = [{ code: "SN-B01", reason: "시각 인식을 위한 카메라 센서 선행 작동" }];
       }
     }
 
     const missingIntent = text.length < 8;
-    const summaryText = useEnglish 
+    const summaryText = useEng 
       ? `Estimated capabilities match for: "${text.substring(0, 15)}${text.length > 15 ? '...' : ''}"`
       : `입력 상황 "${text.substring(0, 15)}${text.length > 15 ? '...' : ''}"에 대한 최적 추정 매칭 결과`;
 
     const intentNoteText = missingIntent 
-      ? (useEnglish ? "Provide explicit triggers and robot emotions to improve matching." : "구체적인 트리거와 로봇의 감정을 명시하면 더 명확해져요.")
+      ? (useEng ? "Provide explicit triggers and robot emotions to improve matching." : "구체적인 트리거와 로봇의 감정을 명시하면 더 명확해요.")
       : "";
 
     return {
       summary: summaryText,
       missingIntent: missingIntent,
       intentNote: intentNoteText,
-      SN: resultCodes.SN.code ? [{ code: resultCodes.SN.code, reason: useEnglish ? translateToEn("유사 단어 검출 결과로 해당 감지 필터를 활성화함.") : "유사 단어 검출 결과로 해당 감지 필터를 활성화함." }] : [],
-      MP: resultCodes.MP.code ? [{ code: resultCodes.MP.code, reason: useEnglish ? translateToEn("매칭 스코어가 가장 높은 거동을 실시간 적용함.") : "매칭 스코어가 가장 높은 거동을 실시간 적용함." }] : [],
-      PJ: resultCodes.PJ.code ? [{ code: resultCodes.PJ.code, reason: useEnglish ? translateToEn("센서 매칭 데이터에 조화되는 투사를 수행함.") : "센서 매칭 데이터에 조화되는 투사를 수행함." }] : [],
-      SP: resultCodes.SP.code ? [{ code: resultCodes.SP.code, reason: useEnglish ? translateToEn("상황 톤앤매너에 어울리는 스피커 음색을 출력함.") : "상황 톤앤매너에 어울리는 스피커 음색을 출력함." }] : []
+      SN: finalSN,
+      MP: sortAndFormat(matchedMP, "모션 반응", "motion response"),
+      PJ: sortAndFormat(matchedPJ, "투사 반응", "projection response"),
+      SP: sortAndFormat(matchedSP, "스피커 반응", "speaker response")
     };
   }
 
-  // 1. Save Capability Database
-  app.post('/api/database', (req, res) => {
-    try {
-      const newDb = req.body;
-      if (!newDb.SN || !newDb.MP || !newDb.PJ || !newDb.SP) {
-        return res.status(400).json({ error: "올바르지 않은 데이터베이스 형식입니다." });
-      }
-      fs.writeFileSync(dbPath, JSON.stringify(newDb, null, 2), 'utf-8');
-      refreshDatabase(newDb);
-      console.log("Database written to disk and cached variables reloaded successfully.");
-      res.json({ success: true });
-    } catch (err) {
-      console.error("Failed to write capability database file:", err);
-      res.status(500).json({ error: `데이터베이스 저장 실패: ${err.message}` });
-    }
-  });
 
-  // 2. Fetch Capability Database
-  app.get('/api/database', (req, res) => {
-    res.json(capabilityDb);
-  });
-
-  // ===== 시나리오 저장소: 메모리 캐시 + 파일 기반 (외부 API 없음) =====
-  // 서버 메모리를 주 저장소로 사용 (빠르고 신뢰성 높음)
-  // 파일은 서버 재시작 시 복원용 백업으로만 사용
-  const SCENARIOS_PATH = path.join(__dirname, 'scenarios.json');
-  const MAX_SCENARIOS = 500; // 최대 500개까지 저장
-
-  // 파일에서 초기 데이터 로드
-  let serverScenariosCache = [];
-  let writeInProgress = false;
-  let pendingWrite = false;
-
-  try {
-    if (fs.existsSync(SCENARIOS_PATH)) {
-      const raw = fs.readFileSync(SCENARIOS_PATH, 'utf-8');
-      const parsed = JSON.parse(raw || '[]');
-      if (Array.isArray(parsed)) {
-        serverScenariosCache = parsed;
-        console.log(`시나리오 ${serverScenariosCache.length}개 로드 완료 (파일에서 복원)`);
-      }
-    }
-  } catch (e) {
-    console.warn('scenarios.json 로드 실패, 빈 배열로 시작:', e.message);
-    serverScenariosCache = [];
-  }
-
-  // 비동기 파일 쓰기 (write coalescing으로 race condition 방지)
-  const flushToDisk = async (data) => {
-    if (writeInProgress) {
-      pendingWrite = true;
-      return;
-    }
-    writeInProgress = true;
-    try {
-      fs.writeFileSync(SCENARIOS_PATH, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (e) {
-      console.warn('scenarios.json 쓰기 실패:', e.message);
-    } finally {
-      writeInProgress = false;
-      if (pendingWrite) {
-        pendingWrite = false;
-        await flushToDisk(serverScenariosCache);
-      }
-    }
-  };
-
-  // GET /api/scenarios - 현재 저장된 시나리오 목록 반환
-  app.get('/api/scenarios', (req, res) => {
-    // 메모리 캐시를 직접 반환 (항상 최신, 외부 API 호출 없음)
-    res.json(serverScenariosCache);
-  });
-
-  // POST /api/scenarios - 시나리오 추가/삭제
-  app.post('/api/scenarios', async (req, res) => {
-    try {
-      const { action, scenario, id } = req.body;
-
-      if (action === 'save' && scenario) {
-        // 중복 체크
-        const exists = serverScenariosCache.some(
-          s => s.id === scenario.id || 
-          (s.scenarioText && scenario.scenarioText && 
-           s.scenarioText.trim() === scenario.scenarioText.trim() && 
-           JSON.stringify(s.result?.summary) === JSON.stringify(scenario.result?.summary))
-        );
-        if (!exists) {
-          // 새 항목을 맨 앞에 추가, 최대 MAX_SCENARIOS개 유지
-          serverScenariosCache = [scenario, ...serverScenariosCache].slice(0, MAX_SCENARIOS);
-        }
-      } else if (action === 'delete' && id) {
-        serverScenariosCache = serverScenariosCache.filter(s => s.id !== id);
-      }
-
-      // 비동기로 파일에 저장 (응답은 즉시 반환)
-      flushToDisk(serverScenariosCache);
-
-      res.json(serverScenariosCache);
-    } catch (err) {
-      console.error('시나리오 처리 오류:', err);
-      res.status(500).json({ error: `시나리오 처리 실패: ${err.message}` });
-    }
-  });
-
-  // 3. Matching endpoint with settings and API validations
-  app.post('/api/match', async (req, res) => {
+app.post('/api/match', async (req, res) => {
     const { scenario, settings = {} } = req.body;
     
     if (!scenario || !scenario.trim()) {
